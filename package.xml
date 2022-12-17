@@ -13,12 +13,27 @@
   <build_depend>rospy</build_depend>
   <build_depend>sensor_msgs</build_depend>
   <build_depend>sensor_msgs.msg</build_depend>
+  <build_depend>numpy</build_depend>
+  <build_depend>matplotlib</build_depend>
+  <build_depend>message_filters</build_depend>
+  <build_depend>cv2</build_depend>
+  <build_depend>os</build_depend>
   <build_export_depend>rospy</build_export_depend>
   <build_export_depend>sensor_msgs</build_export_depend>
   <build_export_depend>sensor_msgs.msg</build_export_depend>
+  <build_export_depend>numpy</build_export_depend>
+  <build_export_depend>matplotlib</build_export_depend>
+  <build_export_depend>message_filters</build_export_depend>
+  <build_export_depend>cv2</build_export_depend>
+  <build_export_depend>os</build_export_depend>
   <exec_depend>rospy</exec_depend>
   <exec_depend>sensor_msgs</exec_depend>
   <exec_depend>sensor_msgs.msg</exec_depend>
+  <exec_depend>numpy</exec_depend>
+  <exec_depend>matplotlib</exec_depend>
+  <exec_depend>message_filters</exec_depend>
+  <exec_depend>cv2</exec_depend>
+  <exec_depend>os</exec_depend>
 
   <export>
 

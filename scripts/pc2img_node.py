@@ -5,7 +5,6 @@ import matplotlib as plt
 import message_filters
 import cv2
 import os
-import message_filters
 from sensor_msgs import point_cloud2
 from sensor_msgs.msg import Image
 
