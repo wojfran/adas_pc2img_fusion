@@ -1,128 +1,126 @@
-#!/usr/bin/env python3
+# Import necessary ROS libraries
 import rospy
-import numpy as np
-import matplotlib as plt
-import message_filters
+import sensor_msgs.point_cloud2 as pc2
+from sensor_msgs.msg import PointCloud2, Image
+from cv_bridge import CvBridge
 import cv2
-import os
-from sensor_msgs import point_cloud2
-from sensor_msgs.msg import Image
+import numpy as np
 
-def read_calib_file(filepath):
-    """
-    Read in a calibration file and parse into a dictionary.
-    Ref: https://github.com/utiasSTARS/pykitti/blob/master/pykitti/utils.py
-    """
-    data = {}
-    with open(filepath, 'r') as f:
-        for line in f.readlines():
-            line = line.rstrip()
-            if len(line) == 0: continue
-            key, value = line.split(':', 1)
-            # The only non-float values in these files are dates, which
-            # we don't care about anyway
-            try:
-                data[key] = np.array([float(x) for x in value.split()])
-            except ValueError:
-                pass
+# Define the ProjectionNode class
+class ProjectionNode:
+  def __init__(self):
+    # Initialize the node
+    rospy.init_node('projection_node')
 
-    return data
+    # Initialize the publisher of the projected image
+    # idk what topic we are using so this one is a 
+    # placeholder
+    rospy.Publisher("aeb/projected_image?", Image, queue_size=10)
 
-def load_velo_scan(velo_filename):
-    scan = np.fromfile(velo_filename, dtype=np.float32)
-    scan = scan.reshape((-1, 4))
-    return scan
+    # Initialize the bridge to convert ROS images to OpenCV images
+    self.bridge = CvBridge()
 
-def project_velo_to_cam2(calib):
-    P_velo2cam_ref = np.vstack((calib['Tr_velo_to_cam'].reshape(3, 4), np.array([0., 0., 0., 1.])))  # velo2ref_cam
-    R_ref2rect = np.eye(4)
-    R0_rect = calib['R0_rect'].reshape(3, 3)  # ref_cam2rect
-    R_ref2rect[:3, :3] = R0_rect
-    P_rect2cam2 = calib['P2'].reshape((3, 4))
-    proj_mat = P_rect2cam2 @ R_ref2rect @ P_velo2cam_ref
-    return proj_mat
+    # Subscribe to the point cloud topic
+    # topic name is a placeholder
+    rospy.Subscriber('aeb/point_cloud?', PointCloud2, self.point_cloud_callback)
 
-def project_to_image(points, proj_mat):
-    """
-    Apply the perspective projection
-    Args:
-        pts_3d:     3D points in camera coordinate [3, npoints]
-        proj_mat:   Projection matrix [3, 4]
-    """
-    num_pts = points.shape[1]
+    # Subscribe to the image topic
+    # topic name is a paceholder
+    rospy.Subscriber('aeb/image?', Image, self.image_callback)
 
-    # Change to homogenous coordinate
-    points = np.vstack((points, np.ones((1, num_pts))))
-    points = proj_mat @ points
-    points[:2, :] /= points[2, :]
-    return points[:2, :]
+    # Initialize the point cloud and image variables
+    self.point_cloud = None
+    self.image = None
 
-def render_lidar_on_image(pts_3d, img, calib, img_width, img_height):
-    # projection matrix (project from velo2cam2)
-    proj_lidar2cam2 = project_velo_to_cam2(calib)
+    # Set the camera matrix and distortion coefficients
+    # This will need to be evaluated once we know the position
+    # of the camera and the lidar on the car
+    self.camera_matrix = np.array([[fx, 0, cx],
+                                   [0, fy, cy],
+                                   [0, 0, 1]])
+    
+    # In theory the distortion coefficients can be not given
+    # to the cv2.projectPoints function but this assumes that
+    # the camera has no distortion
+    self.dist_coeffs = np.array([k1, k2, p1, p2, k3])
 
-    # apply projection
-    pts_2d = project_to_image(pts_3d.transpose(), proj_lidar2cam2)
+    # Set the rotation and translation vectors
+    # This will need to be evaluated once we know the position
+    # of the camera and the lidar on the car
+    self.rvec = rvec
+    self.tvec = tvec
 
-    # if the filters end up not working they can be either commented out
-    # or replaced with o3d_cloud_pass_through_filter funcions from
-    # open3d-ros-helper
+    # Create the lookup table for the colors
+    self.color_lut = self.create_color_lut()
 
-    # Filter lidar points to be within image FOV
-    inds = np.where((pts_2d[0, :] < img_width) & (pts_2d[0, :] >= 0) &
-                    (pts_2d[1, :] < img_height) & (pts_2d[1, :] >= 0) &
-                    (pts_3d[:, 0] > 0)
-                    )[0]
+  def point_cloud_callback(self, data):
+    # Convert the point cloud message to a NumPy array
+    self.point_cloud = np.array(list(pc2.read_points(data)))
 
-    # Filter out pixels points
-    imgfov_pc_pixel = pts_2d[:, inds]
+  def image_callback(self, data):
+    # Convert the image message to a OpenCV image
+    self.image = self.bridge.imgmsg_to_cv2(data, "bgr8")
 
-    # Retrieve depth from lidar
-    imgfov_pc_lidar = pts_3d[inds, :]
-    imgfov_pc_lidar = np.hstack((imgfov_pc_lidar, np.ones((imgfov_pc_lidar.shape[0], 1))))
-    imgfov_pc_cam2 = proj_lidar2cam2 @ imgfov_pc_lidar.transpose()
+  def run(self):
+    # Set the loop rate
+    rate = rospy.Rate(10)
 
-    cmap = plt.cm.get_cmap('hsv', 256)
-    cmap = np.array([cmap(i) for i in range(256)])[:, :3] * 255
+    while not rospy.is_shutdown():
+      # Check if we have both the point cloud and image
+      if self.point_cloud is not None and self.image is not None:
+        # Project the point cloud onto the image
+        projected_image = self.project_point_cloud(self.point_cloud, self.image)
 
-    for i in range(imgfov_pc_pixel.shape[1]):
-        depth = imgfov_pc_cam2[2, i]
-        color = cmap[int(640.0 / depth), :]
-        cv2.circle(img, (int(np.round(imgfov_pc_pixel[0, i])),
-                         int(np.round(imgfov_pc_pixel[1, i]))),
-                   2, color=tuple(color), thickness=-1)
-    plt.imshow(img)
-    plt.yticks([])
-    plt.xticks([])
-    plt.show()
-    return img
+        # Publish the resulting image
+        self.pub.publish('projected_image', self.bridge.cv2_to_imgmsg(projected_image, "bgr8"))
 
-def converter_callback(pointcloud, image):
-    # Load image, calibration file, label bbox
-    rgb = cv2.cvtColor(cv2.imread(os.path.join('data/000114_image.png')), cv2.COLOR_BGR2RGB)
-    img_height, img_width, img_channel = rgb.shape
+      rate.sleep()
 
-    # Load calibration
-    # idk if it won't be better to just write the calibration matrix 
-    # directly here or somewhere else in the node
-    calib = read_calib_file('data/000114_calib.txt')
+  def project_point_cloud(self, point_cloud, image):
+    # Convert the point cloud to homogeneous coordinates
+    homogeneous_points = np.hstack((point_cloud, np.ones((point_cloud.shape[0], 1))))
 
-    # Load Lidar PC
-    # This will be replaced with pointcloud 3d point data
-    # from the pointcloud topic
-    pc_velo = load_velo_scan('data/000114.bin')[:, :3]
+    # Transform the points to the camera frame using the extrinsic parameters
+    camera_points, _ = cv2.projectPoints(homogeneous_points, self.rvec, self.tvec, self.camera_matrix, self.dist_coeffs)
 
-    render_lidar_on_image(pc_velo, rgb, calib, img_width, img_height)
+    # Convert the points back to non-homogeneous coordinates
+    camera_points = np.int32(camera_points.reshape(-1, 2))
 
+    # Compute the distance of each point from the camera
+    distances = np.linalg.norm(point_cloud, axis=1)
 
+    # Use the lookup table to map the distances to colors
+    colors = self.color_lut[distances.astype(np.uint8)]
+
+    # Create a list of keypoints from the points and colors
+    keypoints = [cv2.KeyPoint(x, y, 2, _class_id=i) for i, (x, y) in enumerate(camera_points)]
+
+    # Draw the keypoints on the image
+    cv2.drawKeypoints(image, keypoints, image, color=colors, flags=cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
+
+    return image
+
+  def create_color_lut(self):
+    # Define the color map
+    color_map = [(0, 0, 255), (0, 255, 0), (255, 0, 0)]
+
+    # Normalize the distances between 0 and 255
+    distances = np.linalg.norm(self.point_cloud, axis=1)
+    distances = (distances - np.min(distances)) / (np.max(distances) - np.min(distances))
+    distances *= 255
+
+    # Create the lookup table
+    color_lut = np.empty((256, 3)
+    for i in range(256):
+      index = int(i / 255 * (len(color_map) - 1))
+      color_lut[i] = color_map[index]
+
+    return color_lut
+
+# Run the node
 if __name__ == '__main__':
-    rospy.init_node("pointcloud_to_image_converter")
-    pub = rospy.Publisher("/aeb/deepimage?", Image, queue_size=10)
-    pc2_sub = message_filters.Subscriber('pointcloud', point_cloud2, callback=converter_callback)
-    img_sub = message_filters.Subscriber('image', Image, callback=converter_callback)
-    rospy.loginfo("Converter node has started.")
-
-
-    ts = message_filters.TimeSynchronizer([pc2_sub, img_sub],10)
-    ts.registerCallback(converter_callback)
-    rospy.spin()
+  try:
+    node = ProjectionNode()
+    node.run()
+  except rospy.ROSInterruptException:
+    pass
