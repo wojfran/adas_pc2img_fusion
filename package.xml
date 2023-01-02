@@ -16,18 +16,21 @@
   <build_depend>numpy</build_depend>
   <build_depend>cv_bridge</build_depend>
   <build_depend>cv2</build_depend>
+  <build_depend>sys</build_depend>
   <build_export_depend>rospy</build_export_depend>
   <build_export_depend>sensor_msgs.point_cloud2</build_export_depend>
   <build_export_depend>sensor_msgs.msg</build_export_depend>
   <build_export_depend>numpy</build_export_depend>
   <build_export_depend>cv_bridge</build_export_depend>
   <build_export_depend>cv2</build_export_depend>
+  <build_export_depend>sys</build_export_depend>
   <exec_depend>rospy</exec_depend>
   <exec_depend>sensor_msgs.point_cloud2</exec_depend>
   <exec_depend>sensor_msgs.msg</exec_depend>
   <exec_depend>numpy</exec_depend>
   <exec_depend>cv_bridge</exec_depend>
   <exec_depend>cv2</exec_depend>
+  <exec_depend>sys</exec_depend>
 
   <export>
 
