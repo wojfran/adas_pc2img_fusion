@@ -67,8 +67,6 @@ class ProjectionNode:
       rate.sleep()
 
   def project_point_cloud(self, point_cloud, image):
-    with open('000007.txt','r') as f:
-        calib = f.readlines()
 
     # Projection matrix (3 x 4) for left eye color Camera 2
     P2 = np.matrix('7.215377000000e+02 0.000000000000e+00 6.095593000000e+02 0; '
