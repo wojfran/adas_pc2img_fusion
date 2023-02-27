@@ -12,9 +12,7 @@ def talker():
   rospy.init_node('image', anonymous=False)
   bridge = CvBridge()
   rate = rospy.Rate(0.20)
-  sn = int(sys.argv[1]) if len(sys.argv)>1 else 7 #default 0-7517
-  name = '%06d'%sn # 6 digit zeropadding
-  img = cv2.imread(f'{name}.png')
+  img = cv2.imread('000007.png')
   msg = bridge.cv2_to_imgmsg(img, 'bgr8')
   while not rospy.is_shutdown():
     rospy.loginfo('Trying\n')

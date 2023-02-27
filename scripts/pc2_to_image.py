@@ -70,19 +70,45 @@ class ProjectionNode:
     with open('000007.txt','r') as f:
         calib = f.readlines()
 
-    # P2 (3 x 4) for left eye
-    P2 = np.matrix([float(x) for x in calib[2].strip('\n').split(' ')[1:]]).reshape(3,4)
-    R0_rect = np.matrix([float(x) for x in calib[4].strip('\n').split(' ')[1:]]).reshape(3,3)
+    # Projection matrix (3 x 4) for left eye color Camera 2
+    P2 = np.matrix('7.215377000000e+02 0.000000000000e+00 6.095593000000e+02 0; '
+                  +'0.000000000000e+00 7.215377000000e+02 1.728540000000e+02 0; '
+                  +'0.000000000000e+00 0.000000000000e+00 1.000000000000e+00 0')
+    
+    # Rotation matrix of the camera frame axes
+    # We could ommit it as we are translating the pc to
+    # the camera's reference frame and thus already rotating the
+    # axes of the lidar to fit the camera's axes, however, the kitti
+    # people used this rotation to make the result better, idk why and how
+    # it is almost and identity matrix
+    # Edit: it might be due to the fact that the Tr_velo_to_cam matrix
+    # translates the pc coordinates to Camera 0 reference frame and
+    # the image is from Camera 2
+    R0_rect = np.matrix('0.9999239 0.00983776 -0.007445048; '
+                      +'-0.009869795 0.9999421 -0.004278459; '
+                      +'0.007402527 0.004351614 0.9999631')
+    
     # Add a 1 in bottom-right, reshape to 4 x 4
     R0_rect = np.insert(R0_rect,3,values=[0,0,0],axis=0)
     R0_rect = np.insert(R0_rect,3,values=[0,0,0,1],axis=1)
-    Tr_velo_to_cam = np.matrix([float(x) for x in calib[5].strip('\n').split(' ')[1:]]).reshape(3,4)
+    
+    # The leftmost part of the matrix (3x3) is the rotation matrix R, while the rightmost vector is the origin translation vector
+    # This matrix is used to translate and rotate the pointcloud from the lidar's reference frame to the camera's reference frame
+    Tr_velo_to_cam = np.matrix('7.533745000000e-03 -9.999714000000e-01 -6.166020000000e-04 -4.069766000000e-03; '
+                              +'1.480249000000e-02 7.280733000000e-04 -9.998902000000e-01 -7.631618000000e-02; '
+                              +'9.998621000000e-01 7.523790000000e-03 1.480755000000e-02 -2.717806000000e-01')
+    
+    # Add a 1 in bottom-right, reshape to 4 x 4
     Tr_velo_to_cam = np.insert(Tr_velo_to_cam,3,values=[0,0,0,1],axis=0)
 
     points = point_cloud
     velo = np.insert(points,3,1,axis=1).T
     velo = np.delete(velo,np.where(velo[0,:]<0),axis=1)
+    
+    
     cam = P2 * R0_rect * Tr_velo_to_cam * velo
+    
+    
     cam = np.delete(cam,np.where(cam[2,:]<0)[1],axis=1)
     # get u,v,z
     cam[:2] /= cam[2,:]
